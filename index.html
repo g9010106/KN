@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>KN 跟讀練習</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f0f4f8;
+  --surface:#ffffff;
+  --surface2:#f0f4f8;
+  --accent:#3b7de9;
+  --accent-light:#e8f0fe;
+  --text:#1a2744;
+  --muted:#4a5a72;
+  --dim:#8896a8;
+  --border:#dde3ed;
+  --green:#27ae60;
+  --green-light:#e8f8ef;
+  --orange:#e67e22;
+  --red:#e74c3c;
+  --navy:#1a2744;
+  --radius:14px;
+  --gap:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;color:var(--text)}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:var(--border);outline:none;width:100%}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer}
+
+/* ── LAYOUT ── */
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+
+/* Header */
+#hdr{background:var(--navy);display:flex;align-items:center;justify-content:space-between;padding:12px 16px;flex-shrink:0}
+.brand{font-size:10px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.8px;text-transform:uppercase}
+.proj{font-size:15px;font-weight:700;color:#fff}
+.hdr-btn{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff}
+
+/* Module tabs */
+#tabs{display:flex;gap:6px;padding:10px 14px;overflow-x:auto;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);scrollbar-width:none}
+#tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;background:transparent;color:var(--dim);border:1.5px solid transparent;white-space:nowrap;transition:all .15s}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Progress */
+#prog-row{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+#prog-bar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+#prog-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s}
+#prog-label{font-size:11px;color:var(--dim);white-space:nowrap;font-weight:600}
+
+/* Scrollable main */
+#main{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 14px 24px;display:flex;flex-direction:column;gap:var(--gap);scrollbar-width:none}
+#main::-webkit-scrollbar{display:none}
+
+/* Sentence card */
+#card{background:var(--surface);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--border)}
+.sec-row{display:flex;align-items:center;justify-content:space-between}
+.sec-badge{display:flex;align-items:center;gap:5px;background:var(--accent-light);color:var(--accent);font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;letter-spacing:.3px}
+.sec-dot{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.sent-counter{font-size:11px;color:var(--dim);font-weight:700}
+
+.speak-prompt{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--green);background:var(--green-light);padding:6px 10px;border-radius:8px;opacity:0;transition:opacity .3s}
+.speak-prompt.show{opacity:1}
+.speak-pulse{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.4)}}
+
+.en-text{font-size:20px;line-height:1.55;font-weight:700;color:var(--text);word-break:break-word}
+.en-text::before{content:'"';color:var(--accent);margin-right:1px}
+.en-text::after{content:'"';color:var(--accent);margin-left:1px}
+
+.zh-wrap{border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:3px}
+.zh-label{font-size:9px;font-weight:700;color:var(--accent);letter-spacing:.5px;text-transform:uppercase}
+.zh-text{font-size:14px;line-height:1.65;color:var(--muted)}
+.zh-text::before{content:'「';color:var(--accent)}
+.zh-text::after{content:'」';color:var(--accent)}
+.zh-blur .zh-text{filter:blur(6px);user-select:none}
+
+/* Player */
+#player{background:var(--surface);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:10px;border:1px solid var(--border)}
+.ctrl-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ctrl-btn{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--muted);font-size:19px;border:1.5px solid var(--border);flex-shrink:0;transition:all .15s}
+.ctrl-btn:active{background:var(--border)}
+#play-btn{flex:1;height:48px;border-radius:12px;background:var(--accent);color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;border:none;transition:background .2s;letter-spacing:.3px}
+#play-btn.playing{background:var(--orange)}
+#play-btn:active{opacity:.88}
+
+.speed-pills{display:flex;gap:6px}
+.spd{flex:1;padding:7px 0;border-radius:10px;font-size:12px;font-weight:700;background:var(--bg);color:var(--dim);border:1.5px solid var(--border);text-align:center;transition:all .15s}
+.spd.active{background:var(--accent-light);color:var(--accent);border-color:var(--accent)}
+
+#countdown-row{display:flex;align-items:center;justify-content:center;gap:8px;min-height:18px}
+#countdown-text{font-size:12px;color:var(--dim);font-weight:600}
+#countdown-bar{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden;display:none}
+#countdown-fill{height:100%;background:var(--green);border-radius:2px;transition:width .1s linear}
+
+/* Shadowing */
+#shadow{background:var(--surface);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:8px;border:1px solid var(--border)}
+.shadow-title{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--text)}
+.shadow-btns{display:flex;gap:8px}
+.shadow-btn{flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:600;background:var(--bg);color:var(--muted);border:1.5px solid var(--border);text-align:center;transition:all .15s}
+.shadow-btn.active{background:#fff0f0;color:var(--red);border-color:var(--red)}
+.shadow-btn#play-rec-btn{color:var(--accent);border-color:var(--accent);background:var(--accent-light)}
+#rec-status{font-size:11px;color:var(--dim);text-align:center;min-height:14px;font-weight:600}
+
+/* Bottom controls */
+#bottom{background:var(--surface);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:10px;border:1px solid var(--border)}
+.slider-row{display:flex;align-items:center;gap:10px}
+.slider-label{font-size:11px;color:var(--dim);white-space:nowrap;font-weight:600}
+#pause-val{font-size:11px;font-weight:700;color:var(--accent);min-width:28px;text-align:right}
+.mode-row{display:flex;gap:6px}
+.mode-btn{flex:1;padding:9px 4px;border-radius:10px;font-size:11px;font-weight:600;background:var(--bg);color:var(--dim);border:1.5px solid var(--border);text-align:center;line-height:1.4;transition:all .15s}
+.mode-btn.on{border-color:var(--accent);color:var(--accent);background:var(--accent-light)}
+#mastered-btn{width:100%;padding:10px;border-radius:10px;font-size:13px;font-weight:600;background:var(--bg);color:var(--dim);border:1.5px solid var(--border);text-align:center;transition:all .15s}
+#mastered-btn.done{background:var(--green-light);color:var(--green);border-color:var(--green)}
+
+/* Upload panel */
+#upload-panel{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(26,39,68,.7);z-index:50;display:none;align-items:flex-end;justify-content:center}
+#upload-panel.show{display:flex}
+#upload-box{background:var(--surface);border-radius:20px 20px 0 0;width:100%;padding:24px 20px 36px;display:flex;flex-direction:column;gap:14px}
+.upload-title{font-size:16px;font-weight:700;color:var(--text)}
+.upload-sub{font-size:13px;color:var(--muted);line-height:1.55}
+.upload-file-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:12px;background:var(--accent);color:#fff;font-size:15px;font-weight:700;cursor:pointer;border:none}
+.upload-cancel{width:100%;padding:12px;border-radius:12px;background:var(--bg);color:var(--dim);font-size:14px;font-weight:600;border:1.5px solid var(--border)}
+#excel-input{display:none}
+#upload-result{font-size:13px;font-weight:600;color:var(--green);text-align:center;min-height:18px}
+
+/* Toast */
+#toast{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;font-size:13px;padding:10px 20px;border-radius:20px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;z-index:99;font-weight:600}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="hdr">
+    <div>
+      <div class="brand">Kneader Machinery</div>
+      <div class="proj">業務英文跟讀練習</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="hdr-btn" onclick="toggleZh()" id="zh-toggle-btn" title="顯示/隱藏中文">👁</button>
+      <button class="hdr-btn" onclick="openUpload()" title="上傳 Excel 更新句子">📂</button>
+    </div>
+  </div>
+
+  <!-- Upload panel -->
+  <div id="upload-panel" onclick="closeUploadIfBg(event)">
+    <div id="upload-box">
+      <div class="upload-title">📂 上傳 Excel 更新句子</div>
+      <div class="upload-sub">選取 <strong>KN句庫範本.xlsx</strong>（或同格式的檔案），系統會自動讀取欄位 A（音檔名稱）、B（模組）、C（英文）、D（中文）並更新句庫。</div>
+      <label class="upload-file-btn" for="excel-input">選擇 Excel 檔案</label>
+      <input type="file" id="excel-input" accept=".xlsx,.xls" onchange="handleExcel(this)">
+      <div id="upload-result"></div>
+      <button class="upload-cancel" onclick="closeUpload()">取消</button>
+    </div>
+  </div>
+
+  <div id="tabs"></div>
+
+  <div id="prog-row">
+    <div id="prog-bar"><div id="prog-fill" style="width:0%"></div></div>
+    <span id="prog-label">已完成 0 / 0 句</span>
+  </div>
+
+  <div id="main">
+
+    <div id="card">
+      <div class="sec-row">
+        <div class="sec-badge"><span class="sec-dot"></span><span id="module-name"></span></div>
+        <span class="sent-counter" id="sent-counter">01 / 16</span>
+      </div>
+      <div class="speak-prompt" id="speak-prompt">
+        <span class="speak-pulse"></span> Speak Now！大聲跟讀！
+      </div>
+      <div class="en-text" id="en-text"></div>
+      <div class="zh-wrap" id="zh-wrap">
+        <div class="zh-label">中文對照</div>
+        <div class="zh-text" id="zh-text"></div>
+      </div>
+    </div>
+
+    <div id="player">
+      <div class="ctrl-row">
+        <button class="ctrl-btn" onclick="go(-1)">⏮</button>
+        <button id="play-btn" onclick="togglePlay()">▶ 開始跟讀 (Start Play)</button>
+        <button class="ctrl-btn" onclick="go(1)">⏭</button>
+        <button class="ctrl-btn" onclick="replay()" title="重播">↺</button>
+      </div>
+      <div class="speed-pills">
+        <button class="spd" data-s="0.75" onclick="setSpeed(this)">0.75x</button>
+        <button class="spd active" data-s="1" onclick="setSpeed(this)">1.0x</button>
+        <button class="spd" data-s="1.25" onclick="setSpeed(this)">1.25x</button>
+        <button class="spd" data-s="1.5" onclick="setSpeed(this)">1.5x</button>
+      </div>
+      <div id="countdown-row">
+        <span id="countdown-text"></span>
+        <div id="countdown-bar"><div id="countdown-fill" style="width:100%"></div></div>
+      </div>
+    </div>
+
+    <div id="shadow">
+      <div class="shadow-title">🎙 錄音自我比對 (Shadowing Recording)</div>
+      <div class="shadow-btns">
+        <button class="shadow-btn" id="rec-btn" onclick="toggleRec()">● 開始錄音</button>
+        <button class="shadow-btn" id="play-rec-btn" onclick="playRec()" style="display:none">▶ 播放錄音</button>
+      </div>
+      <div id="rec-status"></div>
+    </div>
+
+    <div id="bottom">
+      <div class="slider-row">
+        <span class="slider-label">句後停留</span>
+        <input type="range" id="pause-slider" min="1" max="10" value="4" step="1" oninput="updatePause(this.value)">
+        <span id="pause-val">4秒</span>
+      </div>
+      <div class="mode-row">
+        <button class="mode-btn" id="auto-btn" onclick="toggleMode('auto')">⟳ 自動<br>播下一句</button>
+        <button class="mode-btn" id="loop-btn" onclick="toggleMode('loop')">↺ 單句<br>循環</button>
+        <button class="mode-btn" id="shadow-btn" onclick="toggleMode('shadow')">🎙 跟讀<br>模式</button>
+      </div>
+      <button id="mastered-btn" onclick="toggleMastered()">☆ 標記為「已熟練」</button>
+    </div>
+
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* ── 模組定義（固定順序，可擴充） ── */
+const MODULE_ORDER = ['公司簡介','利拿機','押出機','雙滾輪','計量設備','其他'];
+
+const SENTENCES = [
+  {module:"利拿機",en:"This is the heart of the machine — the mixing chamber is where all the compounding happens.",zh:"這是機器的核心——混合槽本體就是物料進行混煉的地方。",file:"KN-CM-001.mp3"},
+  {module:"利拿機",en:"The standard chamber is made of cast alloy steel with a hard chrome plating on the surface.",zh:"標準型混合槽是用鑄造合金鋼做的，表面鍍了一層硬鉻。",file:"KN-CM-002.mp3"},
+  {module:"利拿機",en:"We use SUS304 stainless steel plates and add extra wear-resistant welding on the bottom ridge.",zh:"不鏽鋼鍛造型改用 SUS304 不鏽鋼板焊製，並在底部凸起處加強耐磨焊道。",file:"KN-CM-003.mp3"},
+  {module:"利拿機",en:"For tough jobs, we can spray tungsten carbide or use high-end powder welding to make it super wear-resistant.",zh:"針對高磨耗需求，表面可以加噴碳化鎢或是用特殊的粉末堆焊，讓它更耐磨。",file:"KN-CM-004.mp3"},
+  {module:"利拿機",en:"The sideboards sit on both sides of the chamber to support the rotor shafts and seal the mixing room.",zh:"側壁位於槽體兩側，負責支撐攪拌軸心並封閉混合室。",file:"KN-CM-005.mp3"},
+  {module:"利拿機",en:"We use carbon steel plates with hard chrome plating to protect the surface.",zh:"標準型側壁使用中碳鋼板，表面有電鍍硬鉻保護。",file:"KN-CM-006.mp3"},
+  {module:"利拿機",en:"These are made of stainless steel with extra hard-facing layers if you need them.",zh:"強化型側壁改用不鏽鋼材質，並根據需求加上耐磨焊層。",file:"KN-CM-007.mp3"},
+  {module:"利拿機",en:"The RAM pushes material down from the top to ensure even mixing throughout the chamber.",zh:"加壓蓋從上方施壓物料，確保混煉均勻。",file:"KN-CM-008.mp3"},
+  {module:"利拿機",en:"It's made of welded steel, and the part that touches the compound is chrome plated.",zh:"標準型加壓蓋是用中碳鋼焊成的，與物料接觸面有鍍硬鉻。",file:"KN-CM-009.mp3"},
+  {module:"利拿機",en:"The surface is all SUS304 stainless steel, so it's easy to clean and won't rust.",zh:"不鏽鋼型加壓蓋與物料接觸面全部改用 SUS304 不鏽鋼，耐腐蝕且好清理。",file:"KN-CM-010.mp3"},
+  {module:"利拿機",en:"The rotors are the parts that turn inside the chamber, flipping and shearing the material.",zh:"攪拌軸與葉片是在混合槽內旋轉的部件，負責翻動和剪切物料。",file:"KN-CM-011.mp3"},
+  {module:"利拿機",en:"We use high-strength SCM440 alloy steel for the shafts and give them a full heat treatment.",zh:"軸心使用高強度的 SCM440 鉻鉬合金鋼，並經過完整熱處理。",file:"KN-CM-012.mp3"},
+  {module:"利拿機",en:"The blades are stainless steel, and we add thick wear-resistant welding right on the tips where they wear out most.",zh:"葉片是不鏽鋼製成的，我們在最容易磨損的葉尖處做重點耐磨堆焊。",file:"KN-CM-013.mp3"},
+  {module:"利拿機",en:"The standard cast alloy steel chamber is generally good for EVA or soft compounds; stainless steel is better for rubber, because the chemical additives in rubber formulas can be corrosive, and stainless steel resists that.",zh:"標準型鑄造合金鋼混合槽，一般適合 EVA 或軟料；不鏽鋼材質適合橡膠用，因為配方中的助劑可能有腐蝕性，不鏽鋼可以抗腐蝕。",file:"KN-CM-014.mp3"},
+  {module:"利拿機",en:"Class A stainless steel lasts longer than the standard and is better suited for rubber compounds.",zh:"不鏽鋼 A 型比標準型更耐用，適合橡膠配方，使用壽命更長。",file:"KN-CM-015.mp3"},
+  {module:"利拿機",en:"Class B, C, and D are designed for abrasive materials like calcium carbonate or EVA formulas.",zh:"耐磨 B、C、D 型專門對付高磨耗配方，例如含碳酸鈣或 EVA 的料。",file:"KN-CM-016.mp3"},
+];
+
+/* ── STATE ── */
+let filtered = [...SENTENCES];
+let cur = 0, speed = 1, pauseSec = 4;
+let mode = {auto:false,loop:false,shadow:false};
+let zhHidden = false;
+let mastered = JSON.parse(localStorage.getItem('kn_mastered')||'{}');
+let audio = new Audio(), countdownTimer = null, loopTimer = null;
+let recMediaRecorder = null, recChunks = [], recBlob = null, recAudio = null;
+let activeModule = 'all';
+
+/* ── BUILD TABS ── */
+function buildTabs(){
+  const used = new Set(SENTENCES.map(d=>d.module));
+  const tabContainer = document.getElementById('tabs');
+  tabContainer.innerHTML = '';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = 'tab active';
+  allBtn.dataset.module = 'all';
+  allBtn.textContent = `全部 (${SENTENCES.length})`;
+  allBtn.onclick = ()=>setModule(allBtn);
+  tabContainer.appendChild(allBtn);
+
+  MODULE_ORDER.forEach(m=>{
+    if(!used.has(m)) return;
+    const count = SENTENCES.filter(d=>d.module===m).length;
+    const btn = document.createElement('button');
+    btn.className = 'tab';
+    btn.dataset.module = m;
+    btn.textContent = `${m} (${count})`;
+    btn.onclick = ()=>setModule(btn);
+    tabContainer.appendChild(btn);
+  });
+}
+
+/* ── MODULE FILTER ── */
+function setModule(btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  activeModule = btn.dataset.module;
+  filtered = activeModule==='all' ? [...SENTENCES] : SENTENCES.filter(d=>d.module===activeModule);
+  cur = 0;
+  render();
+}
+
+/* ── RENDER ── */
+function render(){
+  if(!filtered.length) return;
+  const d = filtered[cur];
+  document.getElementById('module-name').textContent = d.module;
+  document.getElementById('sent-counter').textContent =
+    String(cur+1).padStart(2,'0') + ' / ' + String(filtered.length).padStart(2,'0');
+  document.getElementById('en-text').textContent = d.en;
+  document.getElementById('zh-text').textContent = d.zh;
+  document.getElementById('zh-wrap').classList.toggle('zh-blur', zhHidden);
+
+  const mb = document.getElementById('mastered-btn');
+  if(mastered[d.file]){mb.textContent='✓ 已熟練';mb.classList.add('done');}
+  else{mb.textContent='☆ 標記為「已熟練」';mb.classList.remove('done');}
+
+  updateProgress();
+  stopAudio(); clearCountdown(); resetRec();
+  document.getElementById('speak-prompt').classList.remove('show');
+  const pb = document.getElementById('play-btn');
+  pb.textContent='▶ 開始跟讀 (Start Play)';pb.classList.remove('playing');
+  document.getElementById('main').scrollTop = 0;
+}
+
+function updateProgress(){
+  const total = filtered.length;
+  const done = filtered.filter(d=>mastered[d.file]).length;
+  document.getElementById('prog-fill').style.width = total?(done/total*100)+'%':'0%';
+  document.getElementById('prog-label').textContent = `已完成 ${done} / ${total} 句`;
+}
+
+/* ── AUDIO ── */
+function stopAudio(){
+  clearLoopTimer();
+  try{audio.pause();}catch(e){}
+  const pb=document.getElementById('play-btn');
+  pb.textContent='▶ 開始跟讀 (Start Play)';pb.classList.remove('playing');
+}
+
+function clearLoopTimer(){
+  if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}
+}
+
+function togglePlay(){
+  if(!audio.paused){stopAudio();clearCountdown();return;}
+  playAudio();
+}
+
+function playAudio(){
+  clearLoopTimer();clearCountdown();
+  const src = 'audio/'+filtered[cur].file;
+  if(audio.src !== new URL(src, location.href).href){
+    audio.src = src;
+    audio.load();
+  }
+  audio.playbackRate = speed;
+  audio.currentTime = 0;
+  audio.onended = onAudioEnded;
+  audio.onerror = ()=>{toast('音檔讀取失敗，請確認已部署音檔');};
+  const pb=document.getElementById('play-btn');
+  pb.textContent='⏸ 已暫停 (Pause)';pb.classList.add('playing');
+  audio.play().catch(()=>{
+    pb.textContent='▶ 開始跟讀 (Start Play)';pb.classList.remove('playing');
+    toast('找不到音檔，請先執行 產生語音檔.bat');
+  });
+}
+
+function replay(){stopAudio();clearCountdown();playAudio();}
+
+function onAudioEnded(){
+  const pb=document.getElementById('play-btn');
+  pb.textContent='▶ 開始跟讀 (Start Play)';pb.classList.remove('playing');
+  if(mode.loop){loopTimer=setTimeout(()=>playAudio(),pauseSec*1000);return;}
+  if(mode.shadow){
+    document.getElementById('speak-prompt').classList.add('show');
+    startCountdown(pauseSec,()=>{
+      document.getElementById('speak-prompt').classList.remove('show');
+      autoStartRec();
+    });
+    return;
+  }
+  if(mode.auto && cur<filtered.length-1){
+    startCountdown(pauseSec,()=>{go(1);setTimeout(playAudio,300);});
+    return;
+  }
+  document.getElementById('speak-prompt').classList.add('show');
+}
+
+/* ── COUNTDOWN ── */
+function clearCountdown(){
+  if(countdownTimer){clearInterval(countdownTimer);countdownTimer=null;}
+  document.getElementById('countdown-text').textContent='';
+  document.getElementById('countdown-bar').style.display='none';
+  document.getElementById('speak-prompt').classList.remove('show');
+}
+
+function startCountdown(sec,cb){
+  let left=sec;
+  const bar=document.getElementById('countdown-bar');
+  const fill=document.getElementById('countdown-fill');
+  const txt=document.getElementById('countdown-text');
+  bar.style.display='block';fill.style.width='100%';
+  txt.textContent=`倒數 ${left} 秒...`;
+  countdownTimer=setInterval(()=>{
+    left-=0.1;
+    fill.style.width=Math.max(0,left/sec*100)+'%';
+    if(left<=0){clearInterval(countdownTimer);countdownTimer=null;txt.textContent='';bar.style.display='none';if(cb)cb();}
+    else txt.textContent=`倒數 ${Math.ceil(left)} 秒...`;
+  },100);
+}
+
+/* ── SPEED ── */
+function setSpeed(btn){
+  document.querySelectorAll('.spd').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  speed=parseFloat(btn.dataset.s);
+  if(audio)audio.playbackRate=speed;
+}
+
+/* ── NAV ── */
+function go(dir){stopAudio();clearLoopTimer();clearCountdown();resetRec();cur=Math.max(0,Math.min(filtered.length-1,cur+dir));render();}
+
+/* ── PAUSE SLIDER ── */
+function updatePause(v){pauseSec=parseInt(v);document.getElementById('pause-val').textContent=v+'秒';}
+
+/* ── MODES ── */
+function toggleMode(m){
+  mode[m]=!mode[m];
+  if(m==='loop'&&mode[m]){mode.auto=false;document.getElementById('auto-btn').classList.remove('on');}
+  if(m==='auto'&&mode[m]){mode.loop=false;document.getElementById('loop-btn').classList.remove('on');}
+  document.getElementById(m+'-btn').classList.toggle('on',mode[m]);
+}
+
+/* ── ZH TOGGLE ── */
+function toggleZh(){
+  zhHidden=!zhHidden;
+  document.getElementById('zh-wrap').classList.toggle('zh-blur',zhHidden);
+  document.getElementById('zh-toggle-btn').textContent=zhHidden?'🙈':'👁';
+}
+
+/* ── MASTERED ── */
+function toggleMastered(){
+  const key=filtered[cur].file;
+  if(mastered[key])delete mastered[key]; else mastered[key]=true;
+  localStorage.setItem('kn_mastered',JSON.stringify(mastered));
+  render();
+  toast(mastered[key]?'✓ 已標記為熟練！':'已取消標記');
+}
+
+/* ── RECORDING ── */
+function resetRec(){
+  if(recMediaRecorder&&recMediaRecorder.state==='recording')recMediaRecorder.stop();
+  recMediaRecorder=null;recChunks=[];recBlob=null;
+  if(recAudio){try{recAudio.pause();}catch(e){}recAudio=null;}
+  document.getElementById('rec-btn').textContent='● 開始錄音';
+  document.getElementById('rec-btn').classList.remove('active');
+  document.getElementById('play-rec-btn').style.display='none';
+  document.getElementById('rec-status').textContent='';
+}
+
+function autoStartRec(){if(navigator.mediaDevices)startRec();}
+
+function toggleRec(){
+  if(recMediaRecorder&&recMediaRecorder.state==='recording'){
+    recMediaRecorder.stop();
+    document.getElementById('rec-btn').textContent='● 開始錄音';
+    document.getElementById('rec-btn').classList.remove('active');
+    document.getElementById('rec-status').textContent='錄音結束，按右側播放聆聽。';
+    return;
+  }
+  startRec();
+}
+
+function startRec(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('此瀏覽器不支援錄音');return;}
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    recChunks=[];
+    const opts=MediaRecorder.isTypeSupported('audio/webm')?{mimeType:'audio/webm'}:{};
+    recMediaRecorder=new MediaRecorder(stream,opts);
+    recMediaRecorder.ondataavailable=e=>{if(e.data.size>0)recChunks.push(e.data);};
+    recMediaRecorder.onstop=()=>{
+      stream.getTracks().forEach(t=>t.stop());
+      recBlob=new Blob(recChunks,{type:recMediaRecorder.mimeType||'audio/webm'});
+      document.getElementById('play-rec-btn').style.display='';
+    };
+    recMediaRecorder.start();
+    document.getElementById('rec-btn').textContent='■ 停止錄音';
+    document.getElementById('rec-btn').classList.add('active');
+    document.getElementById('rec-status').textContent='🔴 錄音中...';
+    document.getElementById('play-rec-btn').style.display='none';
+  }).catch(()=>toast('請允許麥克風權限'));
+}
+
+function playRec(){
+  if(!recBlob)return;
+  if(recAudio){try{recAudio.pause();}catch(e){}}
+  recAudio=new Audio(URL.createObjectURL(recBlob));
+  recAudio.play();
+  document.getElementById('rec-status').textContent='▶ 播放錄音中...';
+  recAudio.onended=()=>{document.getElementById('rec-status').textContent='播放完畢。';};
+}
+
+/* ── TOAST ── */
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+/* ── KEYBOARD ── */
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();togglePlay();}
+  if(e.code==='ArrowRight')go(1);
+  if(e.code==='ArrowLeft')go(-1);
+});
+
+/* ── UPLOAD EXCEL ── */
+function openUpload(){
+  document.getElementById('upload-panel').classList.add('show');
+  document.getElementById('upload-result').textContent='';
+  document.getElementById('excel-input').value='';
+}
+function closeUpload(){document.getElementById('upload-panel').classList.remove('show');}
+function closeUploadIfBg(e){if(e.target===document.getElementById('upload-panel'))closeUpload();}
+
+function handleExcel(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      const newSentences = [];
+      for(let i=1; i<rows.length; i++){
+        const r = rows[i];
+        const fname = (r[0]||'').toString().trim();
+        const mod   = (r[1]||'').toString().trim();
+        const en    = (r[2]||'').toString().trim();
+        const zh    = (r[3]||'').toString().trim();
+        if(fname && en) newSentences.push({module:mod||'其他', en, zh, file:fname});
+      }
+      if(!newSentences.length){
+        document.getElementById('upload-result').textContent='⚠ 找不到資料，請確認欄位格式正確';
+        document.getElementById('upload-result').style.color='var(--red)';
+        return;
+      }
+      // Replace global data
+      SENTENCES.length = 0;
+      newSentences.forEach(s=>SENTENCES.push(s));
+      mastered = JSON.parse(localStorage.getItem('kn_mastered')||'{}');
+      document.getElementById('upload-result').textContent=`✓ 成功載入 ${newSentences.length} 句！`;
+      document.getElementById('upload-result').style.color='var(--green)';
+      setTimeout(()=>{
+        closeUpload();
+        activeModule='all';
+        filtered=[...SENTENCES];
+        cur=0;
+        buildTabs();
+        render();
+      }, 1200);
+    } catch(err){
+      document.getElementById('upload-result').textContent='⚠ 讀取失敗：'+err.message;
+      document.getElementById('upload-result').style.color='var(--red)';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ── INIT ── */
+buildTabs();
+render();
+</script>
+</body>
+</html>
